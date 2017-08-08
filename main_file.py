@@ -14,6 +14,8 @@ import os
 import base64
 from Crypto.Cipher import AES
 import redis
+import time
+import random
 
 r = redis.Redis(host="127.0.0.1", port=6379);
 headers = {
@@ -75,11 +77,13 @@ def getFollows(userId, offset=0, limit=5):
         # print(r.hget(user['userId'], 'nickname'));
         if not r.hget(user['userId'], 'userId'):
             r.hmset(user['userId'], user);
+            r.sadd('unprocessed_id', user['userId']);
             flesh += 1;
         else:
             repeatEl.append(user['userId']);
     print('get follows {}, flesh {}, repeat {}:{}'.format(offset+limit, flesh, len(repeatEl), repeatEl));
-    if content['more'] == True:
+    time.sleep(random.random() * 3 + 2);
+    if content['more'] == True and len(repeatEl) != limit:
         offset += limit;
         getFollows(userId, offset, limit);
 
@@ -99,18 +103,29 @@ def getFolloweds(userId, offset=0, limit=5):
         # print(r.hget(user['userId'], 'nickname'));
         if not r.hget(user['userId'], 'userId'):
             r.hmset(user['userId'], user);
+            r.sadd('unprocessed_id', user['userId']);
             flesh += 1;
         else:
             repeatEl.append(user['userId']);
     print('get followeds {}, flesh {}, repeat {}:{}'.format(offset+limit, flesh, len(repeatEl), repeatEl));
+    time.sleep(random.random() * 3 + 2);
     # 接口会返回前1100条数据
     if content['more'] == True and len(repeatEl) != limit:
         offset += limit;
         getFolloweds(userId, offset, limit);
 
+def process_one(userId, offset, limit):
+    print('processing userId {}'.format(userId));
+    getFolloweds(userId, offset, limit);
+    getFollows(userId, offset, limit);
+    print('_________userId {} done_________'.format(userId));
+    r.sadd('processed_id', userId);
+
 def mainly():
     userId = raw_input("Please enter starter ID: ");
-    getFolloweds(userId, 0, 100);
-    getFollows(userId, 0, 100) ;
+    process_one(userId, 0, 100);
+    while r.scard('unprocessed_id') > 0:
+        userId = r.spop('unprocessed_id');
+        process_one(userId, 0, 100);
 
 mainly();

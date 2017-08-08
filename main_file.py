@@ -61,21 +61,56 @@ def dataEncode(data):
     return _data;
 
 def getFollows(userId, offset=0, limit=5):
+    flesh = 0;
+    repeatEl = [];
     _data = {
         'offset': offset,
         'limit': limit,
         'order': True
     };
-    print(_data);
-    req = requests.post('http://music.163.com/weapi/user/getfollows/{}?csrf_token='.format(userId), headers=headers, data=dataEncode(_data));
+    req = requests.post('http://music.163.com/weapi/user/getfollows/{}'.format(userId), headers=headers, data=dataEncode(_data));
     content = req.text.encode('utf-8', 'ignore');
     content = json.loads(content);
     for user in content['follow']:
-        r.hmset(user['userId'], user);
+        # print(r.hget(user['userId'], 'nickname'));
+        if not r.hget(user['userId'], 'userId'):
+            r.hmset(user['userId'], user);
+            flesh += 1;
+        else:
+            repeatEl.append(user['userId']);
+    print('get follows {}, flesh {}, repeat {}:{}'.format(offset+limit, flesh, len(repeatEl), repeatEl));
     if content['more'] == True:
         offset += limit;
         getFollows(userId, offset, limit);
 
+def getFolloweds(userId, offset=0, limit=5):
+    flesh = 0;
+    repeatEl = [];
+    _data = {
+        'userId': userId,
+        'offset': offset,
+        'limit': limit,
+        'csrf_token': ''
+    };
+    req = requests.post('http://music.163.com/weapi/user/getfolloweds?csrf_token=', headers=headers, data=dataEncode(_data));
+    content = req.text.encode('utf-8', 'ignore');
+    content = json.loads(content);
+    for user in content['followeds']:
+        # print(r.hget(user['userId'], 'nickname'));
+        if not r.hget(user['userId'], 'userId'):
+            r.hmset(user['userId'], user);
+            flesh += 1;
+        else:
+            repeatEl.append(user['userId']);
+    print('get followeds {}, flesh {}, repeat {}:{}'.format(offset+limit, flesh, len(repeatEl), repeatEl));
+    # 接口会返回前1100条数据
+    if content['more'] == True and len(repeatEl) != limit:
+        offset += limit;
+        getFolloweds(userId, offset, limit);
 
-userId = raw_input("Please enter user ID: ");
-getFollows(userId, 0, 5);
+def mainly():
+    userId = raw_input("Please enter starter ID: ");
+    getFolloweds(userId, 0, 100);
+    getFollows(userId, 0, 100) ;
+
+mainly();
